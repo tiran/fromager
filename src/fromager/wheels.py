@@ -30,7 +30,8 @@ class BuildEnvironment:
     ):
         self._ctx = ctx
         self.path = parent_dir / f"build-{platform.python_version()}"
-        self._build_requirements = build_requirements
+        self._build_requirements = list(build_requirements)
+        self._build_requirements.append("build")
         self._createenv()
 
     @property
@@ -208,20 +209,13 @@ def default_build_wheel(
         cmd = [
             os.fspath(build_env.python),
             "-m",
-            "pip",
+            "build",
+            "--wheel",
             "-vvv",
-            "--disable-pip-version-check",
-            "wheel",
-            "--no-build-isolation",
-            "--only-binary",
-            ":all:",
-            "--wheel-dir",
+            "--no-isolation",
+            "--outdir",
             os.fspath(ctx.wheels_build),
-            "--no-deps",
-            "--index-url",
-            ctx.wheel_server_url,  # probably redundant, but just in case
-            "--log",
-            os.fspath(build_dir.parent / "build.log"),
+            "-C=--build-option=--build-number=999rhelai",
             os.fspath(build_dir),
         ]
         external_commands.run(
@@ -229,4 +223,5 @@ def default_build_wheel(
             cwd=dir_name,
             extra_environ=override_env,
             network_isolation=ctx.network_isolation,
+            log_filename=os.fspath(build_dir.parent / "build.log"),
         )

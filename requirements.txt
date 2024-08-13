@@ -1,3 +1,4 @@
+build
 click>=8.1.7
 elfdeps>=0.1.2
 html5lib

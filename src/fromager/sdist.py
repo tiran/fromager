@@ -448,7 +448,7 @@ def _handle_build_system_requirements(
 
     for dep in _sort_requirements(build_system_dependencies):
         try:
-            resolved = handle_requirement(
+            handle_requirement(
                 ctx,
                 req=dep,
                 req_type=RequirementType.BUILD_SYSTEM,
@@ -460,12 +460,6 @@ def _handle_build_system_requirements(
             raise ValueError(
                 f"could not handle build-system dependency {dep} for {why}"
             ) from err
-        # We may need these dependencies installed in order to run build hooks
-        # Example: frozenlist build-system.requires includes expandvars because
-        # it is used by the packaging/pep517_backend/ build backend
-        build_environment.maybe_install(
-            ctx, dep, RequirementType.BUILD_SYSTEM, resolved
-        )
         progressbar.update()
     return build_system_dependencies
 
@@ -485,7 +479,7 @@ def _handle_build_backend_requirements(
 
     for dep in _sort_requirements(build_backend_dependencies):
         try:
-            resolved = handle_requirement(
+            handle_requirement(
                 ctx,
                 req=dep,
                 req_type=RequirementType.BUILD_BACKEND,
@@ -497,12 +491,6 @@ def _handle_build_backend_requirements(
             raise ValueError(
                 f"could not handle build-backend dependency {dep} for {why}"
             ) from err
-        # Build backends are often used to package themselves, so in
-        # order to determine their dependencies they may need to be
-        # installed.
-        build_environment.maybe_install(
-            ctx, dep, RequirementType.BUILD_BACKEND, resolved
-        )
         progressbar.update()
     return build_backend_dependencies
 
@@ -522,7 +510,7 @@ def _handle_build_sdist_requirements(
 
     for dep in _sort_requirements(build_sdist_dependencies):
         try:
-            resolved = handle_requirement(
+            handle_requirement(
                 ctx,
                 req=dep,
                 req_type=RequirementType.BUILD_SDIST,
@@ -534,6 +522,5 @@ def _handle_build_sdist_requirements(
             raise ValueError(
                 f"could not handle build-sdist dependency {dep} for {why}"
             ) from err
-        build_environment.maybe_install(ctx, dep, RequirementType.BUILD_SDIST, resolved)
         progressbar.update()
     return build_sdist_dependencies

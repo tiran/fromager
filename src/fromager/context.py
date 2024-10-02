@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import collections
 import json
 import logging
@@ -15,6 +17,7 @@ from . import (
     dependency_graph,
     packagesettings,
 )
+from .requirements import ResolvedRequirement
 
 logger = logging.getLogger(__name__)
 
@@ -158,13 +161,17 @@ class WorkContext:
             self.dependency_graph.serialize(f)
 
     def package_build_info(
-        self, package: str | packagesettings.Package | Requirement
+        self,
+        package: str | packagesettings.Package | Requirement | ResolvedRequirement,
     ) -> packagesettings.PackageBuildInfo:
-        if isinstance(package, Requirement):
+        if isinstance(package, Requirement | ResolvedRequirement):
             name = package.name
         else:
             name = package
         return self.settings.package_build_info(name)
+
+    def source_root_dir(self, req: ResolvedRequirement) -> pathlib.Path:
+        return self.work_dir / req / req
 
     def setup(self) -> None:
         # The work dir must already exist, so don't try to create it.

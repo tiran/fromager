@@ -504,6 +504,13 @@ def _is_wheel_built(
 
         return wheel_filename
     except Exception:
+        logger.debug(
+            "Failed resolve %s-%s on %s",
+            dist_name,
+            resolved_version,
+            wheel_server_urls,
+            exc_info=True,
+        )
         logger.info("could not locate prebuilt wheel")
         return None
 

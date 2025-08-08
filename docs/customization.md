@@ -377,6 +377,11 @@ def post_build(
     )
 ```
 
+### inspect_wheel
+
+TODO
+
+
 ### prebuilt_wheel
 
 The `prebuilt_wheel` hook runs after a prebuilt wheel has been downloaded and

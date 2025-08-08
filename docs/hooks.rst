@@ -238,20 +238,15 @@ Wheel hooks
 
     The return value is ignored.
 
+.. autofromagerhook:: default_inspect_wheel
+
+    The ``inspect_wheel()`` can be used to inspect wheels for issues.
+
+    The return value must be a ``bool``. If ``True``, global inspect
+    hooks are executed, too.
+
+
 .. autofromagerhook:: default_add_extra_metadata_to_wheels
-
-    The ``add_extra_metadata_to_wheels()`` function is responsible to return any
-    data the user would like to include in the wheels that fromager builds. This
-    data will be added to the ``fromager-build-settings`` file under the
-    ``.dist-info`` directory of the wheels. This file already contains the
-    settings used to build that package.
-
-    The arguments available are ``WorkContext``, ``Requirement`` being
-    evaluated, the resolved ``Version`` of that requirement, a ``dict`` with extra
-    environment variables, a ``Path`` to the root directory of the source
-    distribution and a ``Path`` to the ``.dist-info`` directory of the wheel.
-
-    The return value must be a ``dict``, otherwise it will be ignored.
 
 
 Additional types

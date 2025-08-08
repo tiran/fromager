@@ -22,6 +22,7 @@ from packaging.version import Version
 
 from . import (
     external_commands,
+    hooks,
     metrics,
     overrides,
     requirements_file,
@@ -134,6 +135,22 @@ def default_add_extra_metadata_to_wheels(
     raise NotImplementedError
 
 
+def default_inspect_wheel(
+    *,
+    ctx: context.WorkContext,
+    req: Requirement,
+    extra_environ: dict[str, str],
+    wheel_root_dir: pathlib.Path,
+    dist_name: str,
+    dist_version: Version,
+    build_tag: BuildTag,
+    wheel_tags: frozenset[Tag],
+    elfdeps: typing.Iterable[elfdeps.ELFInfo] | None,
+) -> bool:
+    """Inspect unpacked wheel"""
+    return True
+
+
 @metrics.timeit(description="add extra metadata to wheels")
 def add_extra_metadata_to_wheels(
     *,
@@ -207,10 +224,12 @@ def add_extra_metadata_to_wheels(
                 req_file, dist_info_dir / f"{FROMAGER_BUILD_REQ_PREFIX}-{req_file.name}"
             )
 
+        elfdeps: typing.Iterable[elfdeps.ELFInfo] | None = None
+
         if any(tag.platform != "all" for tag in wheel_tags):
             # platlib wheel
             if sys.platform == "linux":
-                _extra_metadata_elfdeps(
+                elfdeps = _extra_metadata_elfdeps(
                     ctx=ctx,
                     req=req,
                     wheel_root_dir=wheel_root_dir,
@@ -226,6 +245,33 @@ def add_extra_metadata_to_wheels(
 
         build_tag_from_settings = pbi.build_tag(version)
         build_tag = build_tag_from_settings if build_tag_from_settings else (0, "")
+
+        run_hooks = overrides.find_and_invoke(
+            req.name,
+            "inspect_wheel",
+            default_inspect_wheel,
+            ctx=ctx,
+            req=req,
+            extra_environ=extra_environ,
+            wheel_root_dir=wheel_root_dir,
+            dist_name=dist_name,
+            dist_version=dist_version,
+            build_tag=build_tag,
+            wheel_tags=wheel_tags,
+            elfdeps=elfdeps,
+        )
+        if run_hooks:
+            hooks.run_inspect_wheel_hooks(
+                ctx=ctx,
+                req=req,
+                extra_environ=extra_environ,
+                wheel_root_dir=wheel_root_dir,
+                dist_name=dist_name,
+                dist_version=dist_version,
+                build_tag=build_tag,
+                wheel_tags=wheel_tags,
+                elfdeps=elfdeps,
+            )
 
         cmd = [
             "wheel",

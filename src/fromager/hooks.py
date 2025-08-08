@@ -4,7 +4,11 @@ import logging
 import pathlib
 import typing
 
+import elfdeps
 from packaging.requirements import Requirement
+from packaging.tags import Tag
+from packaging.utils import BuildTag
+from packaging.version import Version
 from stevedore import extension, hook
 
 if typing.TYPE_CHECKING:
@@ -36,6 +40,37 @@ def _die_on_plugin_load_failure(
     err: Exception,
 ) -> typing.NoReturn:
     raise RuntimeError(f"failed to load overrides for {ep.name}") from err
+
+
+def run_inspect_wheel_hooks(
+    *,
+    ctx: context.WorkContext,
+    req: Requirement,
+    extra_environ: dict[str, str],
+    wheel_root_dir: pathlib.Path,
+    dist_name: str,
+    dist_version: Version,
+    build_tag: BuildTag,
+    wheel_tags: frozenset[Tag],
+    elfdeps: typing.Iterable[elfdeps.ELFInfo] | None,
+) -> None:
+    hook_mgr = _get_hooks("inspect_wheel")
+    if hook_mgr.names():
+        logger.info("starting wheel-inspect hooks")
+    for ext in hook_mgr:
+        # NOTE: Each hook is responsible for doing its own logging for
+        # start/stop because we don't have a good name to use here.
+        ext.plugin(
+            ctx=ctx,
+            req=req,
+            extra_environ=extra_environ,
+            wheel_root_dir=wheel_root_dir,
+            dist_name=dist_name,
+            dist_version=dist_version,
+            build_tag=build_tag,
+            wheel_tags=wheel_tags,
+            elfdeps=elfdeps,
+        )
 
 
 def run_post_build_hooks(

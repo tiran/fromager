@@ -47,6 +47,7 @@ def list_overrides(
         if pbi.plugin:
             for hook in [
                 # from hooks.py
+                "wheel_inspect",
                 "post_build",
                 "post_bootstrap",
                 "prebuilt_wheel",

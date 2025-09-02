@@ -19,19 +19,23 @@ from urllib.parse import quote, unquote, urljoin, urlparse
 import html5lib
 import resolvelib
 from packaging.requirements import Requirement
-from packaging.specifiers import InvalidSpecifier, SpecifierSet
+from packaging.specifiers import InvalidSpecifier
 from packaging.tags import Tag, sys_tags
 from packaging.utils import (
     BuildTag,
     canonicalize_name,
-    parse_sdist_filename,
-    parse_wheel_filename,
 )
 from packaging.version import Version
 from requests.models import Response
 from resolvelib.resolvers import RequirementInformation
 
 from . import overrides
+from .cached import (
+    cached_parse_sdist_filename,
+    cached_parse_wheel_filename,
+    cached_specifierset,
+    cached_version,
+)
 from .candidate import Candidate
 from .constraints import Constraints
 from .extras_provider import ExtrasProvider
@@ -223,7 +227,7 @@ def get_project_from_pypi(
         # Skip items that need a different Python version
         if py_req:
             try:
-                spec = SpecifierSet(py_req)
+                spec = cached_specifierset(py_req)
             except InvalidSpecifier as err:
                 # Ignore files with invalid python specifiers
                 # e.g. shellingham has files with ">= '2.7'"
@@ -246,12 +250,12 @@ def get_project_from_pypi(
         try:
             if filename.endswith(".tar.gz") or filename.endswith(".zip"):
                 is_sdist = True
-                name, version = parse_sdist_filename(filename)
+                name, version = cached_parse_sdist_filename(filename)
                 tags: frozenset[Tag] = frozenset()
                 build_tag: BuildTag = ()
             else:
                 is_sdist = False
-                name, version, build_tag, tags = parse_wheel_filename(filename)
+                name, version, build_tag, tags = cached_parse_wheel_filename(filename)
             if tags:
                 # FIXME: This doesn't take into account precedence of
                 # the supported tags for best fit.
@@ -578,7 +582,7 @@ class GenericProvider(BaseProvider):
 
     def _default_match_function(self, identifier: str, item: str) -> Version | None:
         try:
-            return Version(item)
+            return cached_version(item)
         except Exception as err:
             logger.debug(f"{identifier}: could not parse version from {item}: {err}")
             return None
@@ -594,7 +598,7 @@ class GenericProvider(BaseProvider):
             return None
         value = mo.group(1)
         try:
-            return Version(value)
+            return cached_version(value)
         except Exception as err:
             logger.debug(f"{identifier}: could not parse version from {value}: {err}")
             return None

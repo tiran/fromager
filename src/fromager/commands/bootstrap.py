@@ -19,6 +19,7 @@ from .. import (
     requirements_file,
     server,
 )
+from ..cached import log_cache_stats
 from ..log import requirement_ctxvar
 from ..requirements_file import RequirementType
 from .build import build_parallel
@@ -195,6 +196,8 @@ def bootstrap(
                 raise ValueError(
                     f"Could not produce a pip compatible constraints file. Please review {constraints_filename} for more details"
                 )
+    # version and specifierset stats
+    log_cache_stats()
 
     metrics.summarize(wkctx, "Bootstrapping")
 

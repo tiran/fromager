@@ -24,6 +24,7 @@ from packaging.version import Version
 
 from . import (
     dependencies,
+    exceptions,
     external_commands,
     metrics,
     overrides,
@@ -276,6 +277,7 @@ def validate_wheel_filename(
     )
 
 
+@exceptions.hook_error_wrapper(exceptions.BuildWheelError)
 @metrics.timeit(description="build wheels")
 def build_wheel(
     *,

@@ -83,8 +83,9 @@ def git_clone_fast(
 
     .. note::
 
-       :command:`git` and ``libcurl`` do not support :envvar:`NETRC`. Use
-       :file:`~/.netrc` or :file:`.gitconfig` for authentication.
+       :command:`git` and ``libcurl`` before 8.16.0 do not support
+       :envvar:`NETRC`. Use :file:`~/.netrc` or :file:`.gitconfig`
+       for authentication.
     """
     parsed_url = urlparse(repo_url)
     # Create a clean URL without any credentials for logging
@@ -132,5 +133,48 @@ def git_clone_fast(
             "--jobs=4",
         ]
         external_commands.run(cmd, cwd=str(output_dir), network_isolation=False)
+
+        # add submodule status to debug log: "flag SHA-1 path (git describe)"
+        cmd = ["git", "submodule", "status", "--recursive",]
+        external_commands.run(cmd, cwd=str(output_dir), network_isolation=False)
     else:
         logger.debug("no .gitmodules file")
+
+
+def _generate_git_archival_from_git(
+    source_root_dir: pathlib.Path,
+    *,
+    build_dir: pathlib.Path | None = None,
+    tag_match: str = "*[0-9]*",
+) -> str | None:
+    """Generate a .git_archival.txt file for setuptools-scm
+
+    The function requires a .git directory in the source root directory.
+    setuptools-scm excepts the git archival file in the current working
+    directory.
+
+    See https://setuptools-scm.readthedocs.io/en/latest/usage/#git-archives and
+    https://git-scm.com/docs/git-log#_pretty_formats
+
+    Example::
+
+       node: f4a13d04674c1f8fb3e7a7828c8c3dbd5c297ed9
+       node-date: 2026-02-25T14:00:08Z
+       describe-name: 0.76.0
+    """
+    # --git-dir disables repository discovery in parent directories
+    cmd: list[str] = [
+        "git",
+        "--git-dir",
+        str(source_root_dir / ".git"),
+        "log",
+        f"--pretty=format:node: %H%nnode-date: %cI%ndescribe-name: %(describe:tags=true,match={tag_match})%n",
+        "-1",
+    ]
+    content = external_commands.run(cmd, cwd=str(source_root_dir), network_isolation=False)
+    if build_dir is None:
+        build_dir = source_root_dir
+    archival = build_dir / ".git_archival.txt"
+    archival.write_text(content)
+    logger.info("Generated %s with content: \n%s", archival, content)
+    return content

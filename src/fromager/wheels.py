@@ -457,7 +457,14 @@ def download_wheel(
     wheel_filename = output_directory / resolver.extract_filename_from_url(wheel_url)
     if not wheel_filename.exists():
         logger.info(f"downloading pre-built wheel {wheel_url}")
-        wheel_filename = _download_wheel_check(req, output_directory, wheel_url)
+        # The downloads directory must not contain incomplete files. Download
+        # wheel into a temporary sub directory and rename it on success.
+        with tempfile.TemporaryDirectory(dir=output_directory) as td:
+            tmp_filename = _download_wheel_check(req, td, wheel_url)
+            try:
+                os.rename(tmp_filename, wheel_filename)
+            except FileExistsError:
+                pass
         logger.info(f"saved wheel to {wheel_filename}")
     else:
         logger.info(f"have existing wheel {wheel_filename}")

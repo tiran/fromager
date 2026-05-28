@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import datetime
 import logging
 import pathlib
 import typing
@@ -13,6 +14,7 @@ from packaging.utils import canonicalize_name
 from pydantic import Field
 
 from .. import overrides
+from ..candidate import CooldownPolicy
 from ._models import PackageSettings, SbomSettings
 from ._pbi import PackageBuildInfo
 from ._typedefs import MODEL_CONFIG, GlobalChangelog, Package, Variant
@@ -96,6 +98,7 @@ class Settings:
         variant: Variant | str,
         patches_dir: pathlib.Path,
         max_jobs: int | None,
+        min_release_age: datetime.timedelta = datetime.timedelta(0),
     ) -> None:
         self._settings = settings
         self._package_settings: dict[Package, PackageSettings] = {
@@ -105,6 +108,8 @@ class Settings:
         self._patches_dir = patches_dir
         self._max_jobs = max_jobs
         self._pbi_cache: dict[Package, PackageBuildInfo] = {}
+        self._cooldown = CooldownPolicy(min_release_age)
+        self._reset()
 
     @classmethod
     def from_files(
@@ -115,6 +120,7 @@ class Settings:
         variant: Variant | str,
         patches_dir: pathlib.Path,
         max_jobs: int | None,
+        min_release_age: datetime.timedelta = datetime.timedelta(0),
     ) -> Settings:
         """Create Settings from settings.yaml and directory"""
         if settings_file.is_file():
@@ -134,7 +140,13 @@ class Settings:
             variant=variant,
             patches_dir=patches_dir,
             max_jobs=max_jobs,
+            min_release_age=min_release_age,
         )
+
+    def _reset(self) -> None:
+        """Clear caches and re-populate cooldown package overrides."""
+        self._pbi_cache.clear()
+        self._cooldown.set_package_cooldowns(list(self._package_settings.values()))
 
     @property
     def variant(self) -> Variant:
@@ -144,9 +156,8 @@ class Settings:
     @variant.setter
     def variant(self, v: Variant) -> None:
         """Change current variant (for testing)"""
-        # reset cache
-        self._pbi_cache.clear()
         self._variant = v
+        self._reset()
 
     @property
     def patches_dir(self) -> pathlib.Path:
@@ -156,8 +167,13 @@ class Settings:
     @patches_dir.setter
     def patches_dir(self, path: pathlib.Path) -> None:
         """Change patches_dir (for testing)"""
-        self._pbi_cache.clear()
         self._patches_dir = path
+        self._reset()
+
+    @property
+    def cooldown(self) -> CooldownPolicy:
+        """Get the cooldown policy for this settings instance."""
+        return self._cooldown
 
     @property
     def max_jobs(self) -> int | None:
@@ -167,8 +183,8 @@ class Settings:
     @max_jobs.setter
     def max_jobs(self, jobs: int | None) -> None:
         """Change max jobs (for testing)"""
-        self._pbi_cache.clear()
         self._max_jobs = jobs
+        self._reset()
 
     @property
     def sbom_settings(self) -> SbomSettings | None:

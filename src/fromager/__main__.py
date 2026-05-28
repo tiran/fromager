@@ -8,7 +8,6 @@ import sys
 import click
 
 from . import (
-    candidate,
     clickext,
     commands,
     context,
@@ -271,6 +270,7 @@ def main(
             patches_dir=patches_dir,
             variant=variant,
             max_jobs=jobs,
+            min_release_age=datetime.timedelta(days=min_release_age),
         ),
         constraints_files=constraints_files,
         patches_dir=patches_dir,
@@ -283,11 +283,6 @@ def main(
         network_isolation=network_isolation,
         max_jobs=jobs,
         settings_dir=settings_dir,
-        cooldown=(
-            candidate.Cooldown(min_age=datetime.timedelta(days=min_release_age))
-            if min_release_age > 0
-            else None
-        ),
     )
     wkctx.setup()
     ctx.obj = wkctx

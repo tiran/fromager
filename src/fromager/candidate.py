@@ -1,16 +1,22 @@
+from __future__ import annotations
+
 import dataclasses
 import datetime
 import logging
 import typing
+from collections.abc import Iterable
 from io import BytesIO
 from zipfile import ZipFile
 
 from packaging.metadata import Metadata
 from packaging.requirements import Requirement
-from packaging.utils import BuildTag, canonicalize_name
+from packaging.utils import BuildTag, NormalizedName, canonicalize_name
 from packaging.version import Version
 
 from .request_session import session
+
+if typing.TYPE_CHECKING:
+    from .packagesettings import PackageSettings
 
 logger = logging.getLogger(__name__)
 
@@ -27,6 +33,103 @@ class Cooldown:
     bootstrap_time: datetime.datetime = dataclasses.field(
         default_factory=lambda: datetime.datetime.now(datetime.UTC)
     )
+
+
+class CooldownPolicy:
+    """Per-package and per-version cooldown overrides on top of a global minimum age.
+
+    When ``min_release_age`` is ``timedelta(0)`` the cooldown is globally
+    disabled and ``filter_candidates`` returns all candidates unchanged.
+
+    ``bootstrap_time`` is captured once at construction so every resolution
+    within a single run shares the same reference point.
+    """
+
+    bootstrap_time: datetime.datetime = datetime.datetime.now(datetime.UTC)
+
+    def __init__(
+        self, min_release_age: datetime.timedelta = datetime.timedelta(0)
+    ) -> None:
+        self.min_release_age = min_release_age
+        self.package_cooldowns: dict[NormalizedName, datetime.timedelta] = {}
+        self.cooldown_exempt_versions: set[tuple[NormalizedName, Version]] = set()
+
+    def set_package_cooldowns(self, packages: Iterable[PackageSettings]) -> None:
+        """Populate per-package cooldowns from package settings.
+
+        Clears existing entries first.  Only packages whose
+        ``resolver_dist.min_release_age`` is set (not ``None``) are recorded.
+        """
+        self.package_cooldowns.clear()
+        for pkg in packages:
+            days = pkg.resolver_dist.min_release_age
+            if days is not None:
+                self.package_cooldowns[pkg.name] = datetime.timedelta(days=days)
+
+    def add_cooldown_exempt_versions(self, requirements: Iterable[Requirement]) -> None:
+        """Populate per-version cooldowns from equality-pinned requirements.
+
+        A requirement is only recorded when ``_has_equality_pin()`` returns
+        ``True`` (single exact ``==`` pin without wildcards).
+        """
+        for req in requirements:
+            if _has_equality_pin(req):
+                name = canonicalize_name(req.name)
+                version = Version(next(iter(req.specifier)).version)
+                self.cooldown_exempt_versions.add((name, version))
+
+    def filter_candidates(self, candidates: Iterable[Candidate]) -> list[Candidate]:
+        """Return only candidates that satisfy the cooldown policy.
+
+        A candidate is kept when any of these conditions is true:
+
+        * Its ``(name, version)`` pair is in ``cooldown_exempt_versions``
+          (equality-pinned, cooldown bypassed).
+        * The effective minimum age for its package is zero (cooldown
+          disabled via per-package override).
+        * Its ``upload_time`` is at least *min_age* before
+          ``bootstrap_time``.
+
+        A candidate is rejected when:
+
+        * Its ``upload_time`` is ``None`` (age cannot be verified).
+        * It was published more recently than the effective minimum age.
+
+        When ``min_release_age`` is ``timedelta(0)`` (globally disabled),
+        all candidates are returned unchanged.
+        """
+        if self.min_release_age == datetime.timedelta(0):
+            return list(candidates)
+
+        result: list[Candidate] = []
+        for candidate in candidates:
+            name = canonicalize_name(candidate.name)
+            if (name, candidate.version) in self.cooldown_exempt_versions:
+                result.append(candidate)
+                continue
+
+            min_age = self.package_cooldowns.get(name, self.min_release_age)
+            if min_age == datetime.timedelta(0):
+                result.append(candidate)
+                continue
+
+            if candidate.upload_time is None:
+                continue
+
+            if self.bootstrap_time - candidate.upload_time >= min_age:
+                result.append(candidate)
+
+        return result
+
+
+def _has_equality_pin(req: Requirement) -> bool:
+    """Return ``True`` if the requirement has a single exact ``==`` pin.
+
+    Rejects wildcard pins (``==1.*``) and compound specifiers (``==1,>2``)
+    which are not true exact version pins.
+    """
+    specs = list(req.specifier)
+    return len(specs) == 1 and specs[0].operator == "==" and "*" not in specs[0].version
 
 
 @dataclasses.dataclass(frozen=True, order=True, slots=True, repr=False, kw_only=True)
